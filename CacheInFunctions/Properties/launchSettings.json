@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "CacheInFunctions": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7293"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker",
+      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",
+      "DockerfileRunArguments": "--init",
+      "httpPort": 32818,
+      "useSSL": false
+    }
+  }
+}
