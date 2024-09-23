@@ -6,6 +6,7 @@
     using System.Threading.Tasks;
     using CacheInFunctions.Attributes;
     using CacheInFunctions.Services;
+    using Microsoft.AspNetCore.Mvc;
     using Microsoft.Azure.Functions.Worker;
 
     public class CacheInterceptor
@@ -19,7 +20,7 @@
             _cacheKeyGenerationStrategy = cacheKeyGenerationStrategy;
         }
 
-        public async Task<InvocationResult> ExecuteWithCacheAsync(Func<Task<InvocationResult>> function, MethodInfo methodInfo, object parameter)
+        public async Task<InvocationResult> ExecuteWithCacheAsync(Func<Task<InvocationResult>> function, MethodInfo methodInfo, object parameter, FunctionContext context)
         {
             var cacheAttribute = methodInfo.GetCustomAttribute<CacheEnabledAttribute>();
             if (cacheAttribute == null)
@@ -35,46 +36,23 @@
             var cachedResult = await _cacheService.GetCachedValueAsync(cacheKey);
             if (!string.IsNullOrEmpty(cachedResult))
             {
-                var deserializedResult = Deserialize(cachedResult);// JsonSerializer.Deserialize<T>(cachedResult);
-                if (deserializedResult != null)
+                var deserializedResult = JsonSerializer.Deserialize<JsonElement>(cachedResult);
+
+                if (deserializedResult.ValueKind != JsonValueKind.Undefined)
                 {
-                    return (InvocationResult)deserializedResult;
+                    var l = context.GetInvocationResult();
+                    l.Value = new OkObjectResult( deserializedResult.GetProperty("Value"));
+                    return l;
                 }
             }
-            //InvocationResult invocationResult = await function();
-            // If not in cache, execute the function
+
             InvocationResult result = await function();
 
             // Cache the result
-            var serializedResult = Serialize(result);// JsonSerializer.Serialize(result);
+            var serializedResult = JsonSerializer.Serialize(result.Value);
             await _cacheService.SetCacheValueAsync(cacheKey, serializedResult, TimeSpan.FromSeconds(cacheAttribute.ExpirationInSeconds));
 
             return result;
-        }
-
-
-        public static string Serialize(InvocationResult obj)
-        {
-            var serializableObject = new SerializableObject
-            {
-                TypeName = obj.GetType().AssemblyQualifiedName,
-                Data = JsonSerializer.Serialize(obj) 
-            };
-            return JsonSerializer.Serialize(serializableObject);
-        }
-
-        public static object Deserialize(string serializedString)
-        {
-            var serializableObject = JsonSerializer.Deserialize<SerializableObject>(serializedString);
-
-            if (serializableObject == null || string.IsNullOrEmpty(serializableObject.TypeName))
-                throw new InvalidOperationException("Invalid serialized object.");
-
-            Type objectType = Type.GetType(serializableObject.TypeName);
-            if (objectType == null)
-                throw new InvalidOperationException("Type not found.");
-
-            return JsonSerializer.Deserialize(serializableObject.Data, objectType);
         }
     }
 

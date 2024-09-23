@@ -33,7 +33,7 @@ namespace CacheInFunctions
                 var result = await _cacheInterceptor.ExecuteWithCacheAsync(
                     () => ExecuteNextMiddleware(context, next),  // Execute the actual function if not cached
                     methodInfo,
-                    parameters
+                    parameters, context
                 );
 
                 // If a cached result exists, set it as the function result
